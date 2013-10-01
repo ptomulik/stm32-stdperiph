@@ -431,13 +431,14 @@ FLASH_Status FLASH_EraseSector(uint32_t FLASH_Sector, uint8_t VoltageRange)
   */
 FLASH_Status FLASH_EraseAllSectors(uint8_t VoltageRange)
 {
-  uint32_t tmp_psize = 0x0;
-  FLASH_Status status = FLASH_COMPLETE;
-  
+#if defined (STM32F427X) || defined (STM32F40XX)
+  uint32_t tmp_psize;
+#endif
   /* Wait for last operation to be completed */
-  status = FLASH_WaitForLastOperation();
+  FLASH_Status status = FLASH_WaitForLastOperation();
   assert_param(IS_VOLTAGERANGE(VoltageRange));
   
+#if defined (STM32F427X) || defined (STM32F40XX)
   if(VoltageRange == VoltageRange_1)
   {
      tmp_psize = FLASH_PSIZE_BYTE;
@@ -482,8 +483,10 @@ FLASH_Status FLASH_EraseAllSectors(uint8_t VoltageRange)
     /* if the erase operation is completed, disable the MER Bit */
     FLASH->CR &= (~FLASH_CR_MER);
 #endif /* STM32F40XX */
-
   }   
+#else
+  (void)VoltageRange;
+#endif
   /* Return the Erase Status */
   return status;
 }

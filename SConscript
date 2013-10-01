@@ -23,116 +23,157 @@
 # This SConscript may be used to build static libraries of StdPeriph.
 #
 
-Import(['env', 'overrides'])
+Import(['env', 'options'])
 
 import re
+import SCons.Errors
 
-local_opts =  [
-    'MCU_CORE',   # optional
-    'MCU_FAMILY', # e.g. 'stm32f10x', 'stm32f4xx'
-    'MCU_LINE',   # e.g. 'ld', 'vl', 'md', 'md-vl', etc...
+local_opts =  [ 'MCU_TARGET', 'MCU_FAMILY', 'MCU_CORE' ]
+
+# 
+# Supported MCU targets
+#
+mcu_targets = [
+    'STM32F10X_CL',
+    'STM32F10X_LD',
+    'STM32F10X_MD',
+    'STM32F10X_HD',
+    'STM32F10X_XL',
+    'STM32F10X_LD_VL',
+    'STM32F10X_MD_VL',
+    'STM32F10X_HD_VL',
+
+    # STM32F4xx
+    'STM32F4XX',
+    'STM32F40XX',
+    'STM32F427X',
 ]
 
-mcu_families = {
-    'STM32F10X',
-    'STM32F4XX',
+#
+# Mapping the supported MCU targets to their families
+#
+mcu_family_dict = {
+
+    # STM32F10x
+    'STM32F10X_CL'      : 'STM32F10X',
+    'STM32F10X_LD'      : 'STM32F10X',
+    'STM32F10X_MD'      : 'STM32F10X',
+    'STM32F10X_HD'      : 'STM32F10X',
+    'STM32F10X_XL'      : 'STM32F10X',
+    'STM32F10X_LD_VL'   : 'STM32F10X',
+    'STM32F10X_MD_VL'   : 'STM32F10X',
+    'STM32F10X_HD_VL'   : 'STM32F10X',
+
+    # STM32F4xx
+    'STM32F4XX'         : 'STM32F4XX',
+    'STM32F40XX'        : 'STM32F4XX',
+    'STM32F427X'        : 'STM32F4XX',
 }
 
-mcu_cores = {
+#
+# Mapping MCU family to appropriate cortex core
+#
+mcu_core_dict = {
     'STM32F10X' : 'cortex-m3',
     'STM32F4XX' : 'cortex-m4',
 }
 
-mcu_lines = { 
-    'STM32F10X' : {
-        'CL'    : 'Connectivity Line', 
-        'LD'    : 'Low Density Performance Line', 
-        'MD'    : 'Medium Density Performance Line', 
-        'HD'    : 'High Density Performance Line', 
-        'XL'    : 'XL-Density Line', 
-        'LD_VL' : 'Low Density Value Line', 
-        'MD_VL' : 'Medium Density Value Line', 
-        'HD_VL' : 'High Density Value Line'
-    },
-    'STM32F4XX' : {
-    }
-}
 
-stdperiph_dirs = {
+#
+# Mapping MCU family to appropriate StdPeriph library.
+#
+stdperiph_dict = {
     'STM32F10X' : 'STM32F10x_StdPeriph_Driver',
     'STM32F4XX' : 'STM32F4xx_StdPeriph_Driver',
 }
 
+#
+# Mapping MCU family to appropriate CMSIS directory.
+#
+cmsis_dict = {
+    'STM32F10X' : 'CMSIS/Device/ST/STM32F10x',
+    'STM32F4XX' : 'CMSIS/Device/ST/STM32F4xx',
+}
 
-# Keyword arguments to Library builder.
-kwargs  = dict([(k,v) for k,v in overrides.iteritems() if k not in local_opts])
-# Other options passed via 'overrides'.
-opts = dict([(k,v) for k,v in overrides.iteritems() if k in local_opts])
+
+#
+# Split 'options' into environment overrides and local options.
+#
+ovrr = dict([(k,v) for k,v in options.iteritems() if k not in local_opts])
+opts = dict([(k,v) for k,v in options.iteritems() if k in local_opts])
+
+#
+# MCU_TARGET
+#
+try:             mcu_target = opts['MCU_TARGET']
+except KeyError: raise SCons.Errors.UserError('MCU_TARGET not specified')
+if not mcu_target.upper() in mcu_targets:
+    raise SCons.Errors.UserError('unsupported MCU_TARGET: %s' % mcu_target)
+mcu_target = mcu_target.upper()
 
 #
 # MCU_FAMILY
 #
-try:              mcu_family = opts['MCU_FAMILY']
-except KeyError:  raise SCons.Errors.UserError('MCU_FAMILY not specified!')
-if not mcu_family.upper() in mcu_families:
-    raise SCons.Error.UserError('unsupported MCU_FAMILY: %s' % mcu_family)
-
-stdperiph_dir = stdperiph_dirs[mcu_family.upper()]
+mcu_family = opts.get('MCU_FAMILY', mcu_family_dict[mcu_target])
+mcu_family = mcu_family.upper()
 
 #
-# MCU_LINE
+# STDPERIPH_DIR
 #
-try:              mcu_line = opts['MCU_LINE']
-except KeyError:  raise SCons.Errors.UserError('MCU_LINE not specified!')
-mcu_line  = re.sub('\W', '_', mcu_line)
-if not mcu_line.upper() in mcu_lines[mcu_family.upper()]:
-    raise SCons.Error.UserError('unsupported MCU_LINE: %s' % mcu_line)
+stdperiph_dir = stdperiph_dict[mcu_family]
+
+#
+# CMSIS_DIR 
+#
+cmsis_dir = cmsis_dict[mcu_family]
 
 #
 # MCU_CORE
 #
-mcu_core = opts.get('MCU_CORE', mcu_cores[mcu_family.upper()])
+mcu_core = opts.get('MCU_CORE', mcu_core_dict[mcu_family])
+mcu_core = mcu_core.lower()
 if mcu_core:    mcu_flags = ['-mcpu=%s' % mcu_core, '-mthumb']
 else:           mcu_flags = []
 
 #
 # CPPDEFINES
 #
-cppdefs = env.get('CPPDEFINES',[]) + kwargs.get('CPPDEFINES',[])
-if not 'USE_STDPERIPH_DRIVER' in cppdefs:
-    cppdefs.append('USE_STDPERIPH_DRIVER')
-cppdefs.append('%s_%s' % (mcu_family.upper(), mcu_line.upper()))
-kwargs['CPPDEFINES'] = cppdefs
+cppdefs = ovrr.get('CPPDEFINES', env.get('CPPDEFINES',[]))
+if 'USE_STDPERIPH_DRIVER' not in cppdefs: cppdefs.append('USE_STDPERIPH_DRIVER')
+if mcu_target not in cppdefs:             cppdefs.append(mcu_target)
+ovrr['CPPDEFINES'] = cppdefs
 
 #
 # CPPPATH
 #
-subdirs = ['inc', 'tpl', 'CMSIS/Device/ST/STM32F10x/Include' ]
-cpppath = env.get('CPPPATH',[]) + kwargs.get('CPPPATH',[])
+subdirs = ['inc', 'tpl', '%s/Include' % cmsis_dir ]
+cpppath = ovrr.get('CPPPATH', env.get('CPPPATH',[]))
 cpppath += [ '%s/%s' % (stdperiph_dir, s) for s in subdirs ]
 cpppath += ['#CMSIS/Include']
-kwargs['CPPPATH'] = cpppath
+ovrr['CPPPATH'] = cpppath
 
 #
 # CFLAGS
 #
-cflags = env.get('CFLAGS',[]) + kwargs.get('CFLAGS', [])
+cflags = ovrr.get('CFLAGS', env.get('CFLAGS', []))
 cflags += mcu_flags
-kwargs['CFLAGS'] = cflags
+cflags += ["-Wa,-adhlns='${TARGET}.lst'"]
+ovrr['CFLAGS'] = cflags
 
 #
 # CXXFLAGS
 #
-cxxflags = env.get('CFLAGS',[]) + kwargs.get('CFLAGS', [])
+cxxflags = ovrr.get('CXXFLAGS', ovrr.get('CXXFLAGS', []))
 cxxflags += mcu_flags
-kwargs['CXXFLAGS'] = cxxflags
+cxxflags += ["-Wa,-adhlns='${TARGET}.lst'"]
+ovrr['CXXFLAGS'] = cxxflags
 
 #
 # LINKFLAGS
 #
-linkflags = env.get('CFLAGS',[]) + kwargs.get('CFLAGS', [])
+linkflags = ovrr.get('LINKFLAGS', ovrr.get('LINKFLAGS', []))
 linkflags += mcu_flags
-kwargs['LINKFLAGS'] = linkflags
+ovrr['LINKFLAGS'] = linkflags
 
 #
 # SOURCES
@@ -144,12 +185,18 @@ sources = Flatten(sources)
 #
 # LIBRARY NAME
 #
-libname = "stdperiph_%s_%s" % (mcu_family.lower(), mcu_line.lower())
+libname = "stdperiph_%s" % mcu_target.lower()
 
 #
 # BUILD THE LIBRARY
 #
-target  = env.Library(libname, sources, **kwargs)
+target = env.Library(libname, sources, **ovrr)
+
+#
+# SIDE EFFECTS
+#
+lst_files = [re.sub(r'\.c$', '.o.lst', s.get_path()) for s in sources]
+env.SideEffect(lst_files, target)
 
 #
 # RETURN WHAT WAS BUILT
