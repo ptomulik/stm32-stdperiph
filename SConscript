@@ -28,7 +28,13 @@ Import(['env', 'options'])
 import re
 import SCons.Errors
 
-local_opts =  [ 'MCU_TARGET', 'MCU_FAMILY', 'MCU_CORE' ]
+local_opts =  [ 
+  'CMSIS_BASEDIR',
+  'MCU_CORE',
+  'MCU_FAMILY',
+  'MCU_TARGET',
+  'SCONSCRIPT_TARGET',
+]
 
 # 
 # Supported MCU targets
@@ -106,7 +112,7 @@ opts = dict([(k,v) for k,v in options.iteritems() if k in local_opts])
 # MCU_TARGET
 #
 try:             mcu_target = opts['MCU_TARGET']
-except KeyError: raise SCons.Errors.UserError('MCU_TARGET not specified')
+except KeyError: raise SCons.Errors.UserError('You must specify MCU_TARGET')
 if not mcu_target.upper() in mcu_targets:
     raise SCons.Errors.UserError('unsupported MCU_TARGET: %s' % mcu_target)
 mcu_target = mcu_target.upper()
@@ -118,14 +124,16 @@ mcu_family = opts.get('MCU_FAMILY', mcu_family_dict[mcu_target])
 mcu_family = mcu_family.upper()
 
 #
-# STDPERIPH_DIR
+# STDPERIPH_BASEDIR and STDPERIPH_DIR
 #
-stdperiph_dir = stdperiph_dict[mcu_family]
+stdperiph_basedir = Dir('.') # must be hardcoded to allow variant compilation
+stdperiph_dir = '%s/%s' % (stdperiph_basedir, stdperiph_dict[mcu_family])
 
 #
-# CMSIS_DIR 
+# CMSIS_BASEDIR 
 #
-cmsis_dir = cmsis_dict[mcu_family]
+try:             cmsis_basedir = opts['CMSIS_BASEDIR']
+except KeyError: raise SCons.Errors.UserError('You must specify CMSIS_BASEDIR')
 
 #
 # MCU_CORE
@@ -139,6 +147,7 @@ else:           mcu_flags = []
 # CPPDEFINES
 #
 cppdefs = ovrr.get('CPPDEFINES', env.get('CPPDEFINES',[]))
+cppdefs = cppdefs[:] # make a copy
 if 'USE_STDPERIPH_DRIVER' not in cppdefs: cppdefs.append('USE_STDPERIPH_DRIVER')
 if mcu_target not in cppdefs:             cppdefs.append(mcu_target)
 ovrr['CPPDEFINES'] = cppdefs
@@ -146,32 +155,36 @@ ovrr['CPPDEFINES'] = cppdefs
 #
 # CPPPATH
 #
-subdirs = ['inc', 'tpl', '%s/Include' % cmsis_dir ]
+subdirs = ['inc', 'tpl', '%s/Include' % cmsis_dict[mcu_family] ]
 cpppath = ovrr.get('CPPPATH', env.get('CPPPATH',[]))
+cpppath = cpppath[:] # make a copy
 cpppath += [ '%s/%s' % (stdperiph_dir, s) for s in subdirs ]
-cpppath += ['#CMSIS/Include']
+cpppath += [ '%s/CMSIS/Include' % cmsis_basedir ]
 ovrr['CPPPATH'] = cpppath
 
 #
 # CFLAGS
 #
 cflags = ovrr.get('CFLAGS', env.get('CFLAGS', []))
+cflags = cflags[:] # make a copy
 cflags += mcu_flags
-cflags += ["-Wa,-adhlns='${TARGET}.lst'"]
+cflags += ["-std=c99", "-Wa,-adhlns='${TARGET}.lst'"]
 ovrr['CFLAGS'] = cflags
 
 #
 # CXXFLAGS
 #
 cxxflags = ovrr.get('CXXFLAGS', ovrr.get('CXXFLAGS', []))
+cxxflags = cxxflags[:] # make a copy
 cxxflags += mcu_flags
-cxxflags += ["-Wa,-adhlns='${TARGET}.lst'"]
+cxxflags += ["-std=c++98", "-Wa,-adhlns='${TARGET}.lst'"]
 ovrr['CXXFLAGS'] = cxxflags
 
 #
 # LINKFLAGS
 #
 linkflags = ovrr.get('LINKFLAGS', ovrr.get('LINKFLAGS', []))
+linkflags = linkflags[:] # make a copy
 linkflags += mcu_flags
 ovrr['LINKFLAGS'] = linkflags
 
